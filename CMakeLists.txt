@@ -1,0 +1,7 @@
+# Version de CMake
+cmake_minimum_required(VERSION 3.5)
+
+include($ENV{IDF_PATH}/tools/cmake/project.cmake)
+
+# Especifica el punto de entrada
+project(networks_project)
