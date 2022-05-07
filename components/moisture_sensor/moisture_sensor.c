@@ -33,7 +33,7 @@ int get_sample_average()
   while (index++ < NUM_SAMPLES)
   {
     // sumo la muestra obtenida
-    sum += adc1_get_raw(ADC_CHANNEL);
+    sum += adc1_get_raw(ADC_CHANNEL); // LEE EN EL PIN 33
 
     // espero un tiempo antes de conseguir la siguiente
     vTaskDelay(10 / portTICK_PERIOD_MS);

@@ -8,6 +8,7 @@
 #include "mqtt_control.h"
 #include "spiffs_control.h"
 #include "moisture_sensor.h"
+#include "dht22.h"
 
 // constantes
 #define WIFI_SSID "Familia RyR"
@@ -29,7 +30,7 @@ void task_capture_dht22(void *args)
 
   long last_record = get_time();
 
-  etDHTgpio(4);
+  setDHTgpio(4);
   char temperatureBuffer[64];
   char humidityBuffer[64];
   while (1)
@@ -44,7 +45,7 @@ void task_capture_dht22(void *args)
     if (abs(last_temperature - temperature) > 0.5 || (get_time() - last_record) > 60000)
     {
 
-      int ret = snprintf(temperatureBuffer, temperatureBuffer buffer, "%f", temperature);
+      int ret = snprintf(temperatureBuffer, sizeof temperatureBuffer, "%f", temperature);
       publish_data("sensor/dth22/temperature", temperatureBuffer);
     }
 
@@ -83,7 +84,7 @@ void task_captura_moisture(void *args)
       // guardo los valores actuales
       last_value = current_value;
       last_record = esp_timer_get_time() / 1000;
-      sprintf(data, "%.4f", humedad);
+      sprintf(data, "%.4f", last_value);
       // envio la información al mqtt
       publish_data("sensor/soil_moisture/humidity", data);
     }

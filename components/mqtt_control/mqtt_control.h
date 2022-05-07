@@ -44,4 +44,6 @@ void publish_data(const char* topic, const char* message);
 
 void subscribe_topic(const char *topic);
 
+void mqtt_topics_handler(esp_mqtt_event_handle_t client);
+
 #endif

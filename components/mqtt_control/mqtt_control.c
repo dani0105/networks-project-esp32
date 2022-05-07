@@ -45,6 +45,7 @@ void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event
         printf("TOPIC=%.*s\r\n", event->topic_len, event->topic);
         printf("DATA=%.*s\r\n", event->data_len, event->data);
         //TODO Here you can handle all the incoming info
+        mqtt_topics_handler(event);
         break;
     case MQTT_EVENT_ERROR:
         ESP_LOGI(TAG, "MQTT_EVENT_ERROR");
@@ -70,6 +71,25 @@ void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event
     }
 }
 
+// maneja los topics 
+void mqtt_topics_handler(esp_mqtt_event_handle_t event){
+  char topic[120];
+  snprintf(topic, event->topic_len,"%s", event->topic);
+
+  if(strcmp(topic,"esp32/frecuencia")  == 0){
+    
+  }
+
+  if(strcmp(topic,"esp32/reinicio")  == 0){
+    
+  }
+
+  if(strcmp(topic,"esp32/variacion")  == 0 ){
+    
+  }
+ 
+}
+
 void mqtt_app_start(void)
 {
     is_connected = false;
@@ -90,7 +110,6 @@ void mqtt_app_start(void)
     const esp_mqtt_client_config_t mqtt_cfg = {
         .uri = MQTT_URI,
         .cert_pem = buf,
-        .client_key_pem,
         .username = MQTT_USER,
         .password = MQTT_PASSWORD,
     };
