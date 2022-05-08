@@ -9,6 +9,7 @@
 #include "spiffs_control.h"
 #include "moisture_sensor.h"
 #include "dht22.h"
+#include "mesh_control.h"
 
 // constantes
 #define WIFI_SSID "Familia RyR"
@@ -99,6 +100,10 @@ void task_captura_moisture(void *args)
 // punto de inicio del programa
 void app_main()
 {
+  mesh_layer = -1;
+  iniciar_mesh_red();
+
+
   ESP_ERROR_CHECK(nvs_flash_init());
 
   // configura spiffs
@@ -121,7 +126,7 @@ void app_main()
   }
 
   // agrega tareas (son como hilos)
-  // xTaskCreate(task_capture_dht22, "task_dht22", 2048, NULL, 1, NULL);
+  xTaskCreate(task_capture_dht22, "task_dht22", 2048, NULL, 1, NULL);
   xTaskCreate(task_captura_moisture, "task_moisture", 2048, NULL, 2, NULL);
 
   while (1)
