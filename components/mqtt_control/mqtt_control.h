@@ -24,8 +24,8 @@
 
 
 #define MQTT_URI "mqtts://redes.danielrojas.website:8883"
-#define MQTT_USER "user"
-#define MQTT_PASSWORD "password"
+#define MQTT_USER "test1"
+#define MQTT_PASSWORD "12345678"
 #define MAX_MSG_LEN 1024
 
 

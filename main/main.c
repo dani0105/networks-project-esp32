@@ -4,7 +4,7 @@
 #include "freertos/task.h"
 #include "esp_system.h"
 #include "esp_log.h"
-#include "wifi.h"
+//#include "wifi.h"
 #include "mqtt_control.h"
 #include "spiffs_control.h"
 #include "moisture_sensor.h"
@@ -15,6 +15,13 @@
 #define WIFI_SSID "Familia RyR"
 #define WIFI_PASSWORD "31300128HRDS"
 
+struct data
+{
+  float temperature;
+  float humidity;
+  float soil_humidity;
+};
+
 // obtiene el tiempo en milisegundos
 long get_time()
 {
@@ -22,75 +29,58 @@ long get_time()
 }
 
 // funcion encargada de leer el sensor dht22
-void task_capture_dht22(void *args)
+void task_capture_data(void *args)
 {
-  float last_temperature = 0;
-  float last_humidity = 0;
-  float humidity = 0;
-  float temperature = 0;
-
-  long last_record = get_time();
-
   setDHTgpio(4);
-  char temperatureBuffer[64];
-  char humidityBuffer[64];
-  while (1)
-  {
-    int ret = readDHT();
+  struct data last_data;
+  last_data.temperature = 0;
+  last_data.humidity = 0;
+  last_data.soil_humidity = 0;
 
-    errorHandler(ret);
-
-    humidity = getHumidity();
-    temperature = getTemperature();
-
-    if (abs(last_temperature - temperature) > 0.5 || (get_time() - last_record) > 60000)
-    {
-
-      int ret = snprintf(temperatureBuffer, sizeof temperatureBuffer, "%f", temperature);
-      publish_data("sensor/dth22/temperature", temperatureBuffer);
-    }
-
-    if (abs(last_humidity - humidity) > 0.5 || (get_time() - last_record) > 60000)
-    {
-      int ret = snprintf(humidityBuffer, sizeof humidityBuffer, "%f", humidity);
-      publish_data("sensor/dth22/humidity", humidityBuffer);
-    }
-
-    vTaskDelay(100 / portTICK_PERIOD_MS);
-  }
-
-  vTaskDelete(NULL);
-}
-
-// funcion encargada de leer el sensor soil moisture
-void task_captura_moisture(void *args)
-{
-  // Ultimo valor capturado
-  float last_value = 0;
-  // valor actual
-  float current_value = 0;
-  // tiempo del ultimo valor capturado
+  struct data current_data;
+  current_data.temperature = 0;
+  current_data.humidity = 0;
+  current_data.soil_humidity = 0;
+  struct Packet packet;
   long last_record = get_time();
-
-  char data[20];
-
-  // ciclo para recolectar por siempre los valores
   while (1)
   {
-    current_value = get_humidity();
+    
+    int ret = readDHT();
+    long current_record = get_time();
+    errorHandler(ret);
+    current_data.humidity = getHumidity();
+    current_data.temperature = getTemperature();
+    current_data.soil_humidity = get_soil_humidity();
 
-    // el valor actual es mayor por 0.5 o ha pasado un minuto
-    if (abs(last_value - current_value) > 0.5 || (get_time() - last_record) > 60000)
+    if (abs(last_data.temperature - current_data.temperature) > 0.5 || (current_record - last_record) > 60000)
     {
-      // guardo los valores actuales
-      last_value = current_value;
-      last_record = esp_timer_get_time() / 1000;
-      sprintf(data, "%.4f", last_value);
-      // envio la información al mqtt
-      publish_data("sensor/soil_moisture/humidity", data);
+      last_record = current_record;
+      last_data.temperature = current_data.temperature;
+      packet.data = current_data.temperature;
+      packet.type = Temperature;
+      send_mesh_data(packet);
     }
 
-    // espero un tiempo antes de hacer la siguiente lectura
+    if (abs(last_data.humidity - current_data.humidity) > 0.5 || (current_record - last_record) > 60000)
+    {
+      last_record = current_record;
+      last_data.humidity = current_data.humidity;
+      packet.data = current_data.humidity;
+      packet.type = Humidity;
+      send_mesh_data(packet);
+    }
+
+    if (abs(last_data.soil_humidity - current_data.soil_humidity) > 0.5 || (current_record - last_record) > 60000)
+    {
+      last_record = current_record;
+      last_data.soil_humidity = current_data.soil_humidity;
+      packet.data = current_data.soil_humidity;
+      packet.type = Soil_Humidity;
+      send_mesh_data(packet);
+    }
+
+  
     vTaskDelay(100 / portTICK_PERIOD_MS);
   }
 
@@ -103,15 +93,14 @@ void app_main()
   mesh_layer = -1;
   iniciar_mesh_red();
 
-
   ESP_ERROR_CHECK(nvs_flash_init());
 
   // configura spiffs
   config_spiffs();
 
   // Hace la conexión wifi
-  initialize_wifi(WIFI_SSID, WIFI_PASSWORD);
-  wait_wifi_Connection();
+  // initialize_wifi(WIFI_SSID, WIFI_PASSWORD);
+  // wait_wifi_Connection();
 
   // Inicia analog-to-digital converter (adc)
   init_adc_config();
@@ -126,8 +115,7 @@ void app_main()
   }
 
   // agrega tareas (son como hilos)
-  xTaskCreate(task_capture_dht22, "task_dht22", 2048, NULL, 1, NULL);
-  xTaskCreate(task_captura_moisture, "task_moisture", 2048, NULL, 2, NULL);
+  xTaskCreate(task_capture_data, "task_capture", 2048, NULL, 1, NULL);
 
   while (1)
   {

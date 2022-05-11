@@ -44,7 +44,7 @@ int get_sample_average()
 }
 
 // Obtiene la humedad del sensor
-float get_humidity()
+float get_soil_humidity()
 {
   int valor_digital = get_sample_average();
   return -0.0444 * valor_digital + 177.78;

@@ -21,7 +21,82 @@ esp_netif_t *netif_sta = NULL;
  *                Function Definitions
  *******************************************************/
 
+bool send_to_mqtt(struct Packet data)
+{
+  char buffer[50];
+  if (data.type == Humidity)
+  {
+
+    snprintf(buffer, sizeof buffer, "%d", data.data);
+    publish_data("sensor/dth22/humidity", buffer);
+    return true;
+  }
+
+  if (data.type == Temperature)
+  {
+    snprintf(buffer, sizeof buffer, "%d", data.data);
+    publish_data("sensor/dth22/temperature", buffer);
+    return true;
+  }
+
+  if (data.type == Soil_Humidity)
+  {
+    snprintf(buffer, sizeof buffer, "%d", data.data);
+    publish_data("sensor/dth22/soil_humidity", buffer);
+    return true;
+  }
+  return false;
+}
+
+void send_mesh_data(struct Packet data)
+{
+
+  esp_err_t err;
+  // convierto el paquete en bytes
+  char buffer[sizeof(data)];
+  memcpy(buffer, &data, sizeof(data));
+
+  // arma el paquete para enviar
+  mesh_data_t packet;
+  packet.data = (uint8_t)buffer;
+  packet.size = sizeof(data);
+  packet.proto = MESH_PROTO_BIN;
+  packet.tos = MESH_TOS_P2P;
+
+  // dirección a la que se envia
+  // mesh_addr_t root_addrs;
+  // memset(&root_addrs, 0, sizeof(mesh_addr_t));
+
+  // esto puede ser más optimo.
+  //  verifico si es el nodo raiz y que tipo de paquete es para saber si mandarlo a mqtt o a los demas nodo o al nodo raiz
+  if (esp_mesh_is_root())
+  {
+
+    if (send_to_mqtt(data))
+    {
+      return;
+    }
+
+    // el paquete es del tipo de configuración, entonces lo envio a todos los nodos de la red
+    mesh_addr_t route_table[MESH_ROUTE_TABLE_SIZE];
+    int route_table_size = 0;
+    esp_mesh_get_routing_table((mesh_addr_t *)&route_table, MESH_ROUTE_TABLE_SIZE * 6, &route_table_size);
+
+    for (int i = 0; i < route_table_size; i++)
+    {
+      err = esp_mesh_send(&route_table[i], &packet, MESH_DATA_P2P, NULL, 0);
+    }
+  }
+  else
+  {
+    // este es el caso de que no se el nodo raiz
+    // envio los datos al raiz
+    err = esp_mesh_send(NULL, &packet, 0, NULL, 0);
+  }
+}
+
 // envia datos en la red mesh
+/*
 void esp_mesh_p2p_tx_main(void *arg)
 {
   int i;
@@ -47,8 +122,10 @@ void esp_mesh_p2p_tx_main(void *arg)
   }
   vTaskDelete(NULL);
 }
+*/
 
 // recibe datos en la red mesh
+// aquí solo debería recibir packetes de configuración o paquetes de datos si es el nodo raiz
 void esp_mesh_p2p_rx_main(void *arg)
 {
   int recv_count = 0;
@@ -64,10 +141,44 @@ void esp_mesh_p2p_rx_main(void *arg)
   while (is_running)
   {
     data.size = RX_SIZE;
+    // recibo el paquete
     err = esp_mesh_recv(&from, &data, portMAX_DELAY, &flag, NULL, 0);
     if (err != ESP_OK || !data.size)
     {
-      ESP_LOGE(MESH_TAG, "err:0x%x, size:%d", err, data.size);
+      char buffer[RX_SIZE];
+      // convierto el paquete a la structura
+      struct Packet tmp;
+      memcpy(&tmp, buffer, sizeof(data.size));
+
+      if (esp_mesh_is_root())
+      {
+        // es el nodo red y recibí paquetes de datos. los envio al mqtt
+        if (send_to_mqtt(tmp))
+        {
+          continue;
+        }
+      }
+      else
+      {
+        // se reciben paquetes de configuración
+        if (tmp.type == Change_Diference)
+        {
+
+          continue;
+        }
+
+        if (tmp.type == Change_Time)
+        {
+
+          continue;
+        }
+
+        if (tmp.type == Restart)
+        {
+          continue;
+        }
+      }
+
       continue;
     }
 
@@ -76,13 +187,17 @@ void esp_mesh_p2p_rx_main(void *arg)
   vTaskDelete(NULL);
 }
 
+void process_packet(struct Packet packet)
+{
+}
+
 esp_err_t esp_mesh_comm_p2p_start(void)
 {
   bool is_comm_p2p_started = false;
   if (!is_comm_p2p_started)
   {
     is_comm_p2p_started = true;
-    xTaskCreate(esp_mesh_p2p_tx_main, "MPTX", 3072, NULL, 5, NULL);
+    // xTaskCreate(esp_mesh_p2p_tx_main, "MPTX", 3072, NULL, 5, NULL);
     xTaskCreate(esp_mesh_p2p_rx_main, "MPRX", 3072, NULL, 5, NULL);
   }
   return ESP_OK;

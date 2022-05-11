@@ -12,6 +12,7 @@
 #include "nvs_flash.h"
 #include "esp_log.h"
 #include "string.h"
+#include "mqtt_control.h"
 
 //#define FIX_ROOT
 //#define ROOT
@@ -52,8 +53,8 @@ default 6
         
 //Channel 0 14  default 0
 #define MESH_CHANNEL            0
-#define ROUTER_SSID             "luillidei"
-#define ROUTER_PASSWD           "luillidei"
+#define ROUTER_SSID             "Familia RyR"
+#define ROUTER_PASSWD           "31300128HRDS"
 
 /*
 default 0 if WIFI_AUTH_OPEN
@@ -71,5 +72,20 @@ default 4 if WIFI_AUTH_WPA_WPA2_PSK
 
 int mesh_layer;
 esp_err_t iniciar_mesh_red();
+typedef enum {
+  Humidity = 0, 
+  Temperature = 1, 
+  Soil_Humidity = 2, 
+  Change_Diference = 3, 
+  Change_Time = 4, 
+  Restart = 5 
+} Type;
+
+struct Packet
+{
+  uint16_t data;
+  Type type;
+};
+void send_mesh_data(struct Packet data);
 
 #endif

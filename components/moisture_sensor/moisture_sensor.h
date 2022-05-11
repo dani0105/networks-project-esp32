@@ -21,7 +21,7 @@
 
 int get_sample();
 
-float get_humidity();
+float get_soil_humidity();
 
 esp_err_t init_adc_config();
 
