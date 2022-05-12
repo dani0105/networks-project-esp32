@@ -4,16 +4,10 @@
 #include "freertos/task.h"
 #include "esp_system.h"
 #include "esp_log.h"
-//#include "wifi.h"
 #include "mqtt_control.h"
-#include "spiffs_control.h"
 #include "moisture_sensor.h"
 #include "dht22.h"
 #include "mesh_control.h"
-
-// constantes
-#define WIFI_SSID "Familia RyR"
-#define WIFI_PASSWORD "31300128HRDS"
 
 struct data
 {
@@ -41,11 +35,11 @@ void task_capture_data(void *args)
   current_data.temperature = 0;
   current_data.humidity = 0;
   current_data.soil_humidity = 0;
-  struct Packet packet;
+
   long last_record = get_time();
   while (1)
   {
-    
+
     int ret = readDHT();
     long current_record = get_time();
     errorHandler(ret);
@@ -53,34 +47,28 @@ void task_capture_data(void *args)
     current_data.temperature = getTemperature();
     current_data.soil_humidity = get_soil_humidity();
 
-    if (abs(last_data.temperature - current_data.temperature) > 0.5 || (current_record - last_record) > 60000)
+    if (abs(last_data.temperature - current_data.temperature) > 1 || (current_record - last_record) > 60000)
     {
       last_record = current_record;
       last_data.temperature = current_data.temperature;
-      packet.data = current_data.temperature;
-      packet.type = Temperature;
-      send_mesh_data(packet);
+
+      esp_mesh_p2p_tx_main(current_record, Temperature);
     }
 
-    if (abs(last_data.humidity - current_data.humidity) > 0.5 || (current_record - last_record) > 60000)
+    if (abs(last_data.humidity - current_data.humidity) > 1 || (current_record - last_record) > 60000)
     {
       last_record = current_record;
       last_data.humidity = current_data.humidity;
-      packet.data = current_data.humidity;
-      packet.type = Humidity;
-      send_mesh_data(packet);
+      esp_mesh_p2p_tx_main(current_record, Humidity);
     }
 
-    if (abs(last_data.soil_humidity - current_data.soil_humidity) > 0.5 || (current_record - last_record) > 60000)
+    if (abs(last_data.soil_humidity - current_data.soil_humidity) > 1 || (current_record - last_record) > 60000)
     {
       last_record = current_record;
       last_data.soil_humidity = current_data.soil_humidity;
-      packet.data = current_data.soil_humidity;
-      packet.type = Soil_Humidity;
-      send_mesh_data(packet);
+      esp_mesh_p2p_tx_main(current_record, Soil_Humidity);
     }
 
-  
     vTaskDelay(100 / portTICK_PERIOD_MS);
   }
 
@@ -93,25 +81,27 @@ void app_main()
   mesh_layer = -1;
   iniciar_mesh_red();
 
+  // mientras no este conectado al wifi o a una red mesh
+  while (!get_is_wifi_connected() && !get_is_mesh_connected())
+  {
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
+  }
+
   ESP_ERROR_CHECK(nvs_flash_init());
-
-  // configura spiffs
-  config_spiffs();
-
-  // Hace la conexión wifi
-  // initialize_wifi(WIFI_SSID, WIFI_PASSWORD);
-  // wait_wifi_Connection();
 
   // Inicia analog-to-digital converter (adc)
   init_adc_config();
 
-  // inicia el mqtt
-  mqtt_app_start();
+  // si esta conectado al wifi
+  if(get_is_wifi_connected()){
+    // inicia el mqtt
+    mqtt_app_start();
 
-  // Mientra no este conectado al mqtt
-  while (!is_connected)
-  {
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
+    // Mientra no este conectado al mqtt
+    while (!is_connected)
+    {
+      vTaskDelay(1000 / portTICK_PERIOD_MS);
+    }
   }
 
   // agrega tareas (son como hilos)

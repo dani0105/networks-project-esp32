@@ -83,9 +83,12 @@ typedef enum {
 
 struct Packet
 {
-  uint16_t data;
+  float value;
   Type type;
 };
-void send_mesh_data(struct Packet data);
+
+void esp_mesh_p2p_tx_main(float value, Type type);
+bool get_is_wifi_connected();
+bool get_is_mesh_connected();
 
 #endif
