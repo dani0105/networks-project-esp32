@@ -1,4 +1,5 @@
 #include "mesh_control.h"
+#include "main.h"
 
 const uint8_t MESH_ID[6] = {0x77, 0x77, 0x77, 0x77, 0x77, 0x77};
 struct Packet tx_buf;
@@ -8,25 +9,41 @@ bool is_running = true;
 bool is_mesh_connected = false;
 bool is_wifi_connected = false;
 mesh_addr_t mesh_parent_addr;
+mesh_addr_t my_addr;
 esp_netif_t *netif_sta = NULL;
 
-bool get_is_wifi_connected(){
+bool get_is_wifi_connected()
+{
   return is_wifi_connected;
 }
 
-bool get_is_mesh_connected(){
+bool get_is_mesh_connected()
+{
   return is_mesh_connected;
+}
+
+bool get_is_root()
+{
+  return esp_mesh_is_root();
 }
 
 // envia paquetes
 void esp_mesh_p2p_tx_main(float value, Type type)
 {
+  mesh_addr_t route_table[MESH_ROUTE_TABLE_SIZE];
+  int route_table_size = 0;
+  int i;
+  esp_mesh_get_routing_table((mesh_addr_t *)&route_table,
+                             MESH_ROUTE_TABLE_SIZE * 6, &route_table_size);
+
   esp_err_t err;
   mesh_data_t data;
 
+  ESP_LOGI(MESH_TAG, "Packet value: %f with type: %i", value, type);
+
   // inserto los valores al paquete
-  tx_buf.value=value;
-  tx_buf.type=type;
+  tx_buf.value = value;
+  tx_buf.type = type;
 
   // genero el paquete
   data.data = (uint8_t *)&tx_buf;
@@ -34,12 +51,44 @@ void esp_mesh_p2p_tx_main(float value, Type type)
   data.proto = MESH_PROTO_BIN;
   data.tos = MESH_TOS_P2P;
 
+  char buffer[64];
+  snprintf(buffer, sizeof buffer, "%f", tx_buf.value);
+
   if (esp_mesh_is_root())
   {
     // en caso de ser root mandar directamente al mqtt
 
     // en caso de que los mensajes fuera de configuración
-    return;
+    if (tx_buf.type == Soil_Humidity)
+    {
+      publish_data("tec/soil/humidity", buffer);
+      return;
+    }
+
+    if (tx_buf.type == Humidity)
+    {
+      publish_data("tec/dht22/humidity", buffer);
+      return;
+    }
+
+    if (tx_buf.type == Temperature)
+    {
+      publish_data("tec/dht22/temperature", buffer);
+      return;
+    }
+
+    for (i = 0; i < route_table_size; i++)
+    {
+      esp_mesh_send(&route_table[i], &data, MESH_DATA_P2P, NULL, 0);
+      ESP_LOGI(MESH_TAG, "Sending to:" MACSTR "", MAC2STR(route_table[i].addr));
+    }
+
+    if (tx_buf.type == Restart)
+    {
+      ESP_LOGI(MESH_TAG, "Restarting...");
+      esp_restart();
+      return;
+    }
   }
 
   // en caso de ser un nodo hoja enviar directamente al root
@@ -56,6 +105,7 @@ void esp_mesh_p2p_rx_main(void *arg)
   data.data = (uint8_t *)&rx_buf;
   data.size = RX_SIZE;
   is_running = true;
+  char buffer[64];
 
   while (is_running)
   {
@@ -68,18 +118,56 @@ void esp_mesh_p2p_rx_main(void *arg)
       continue;
     }
     // aqui solo llega si hay un paquete
-    ESP_LOGI(MESH_TAG,"Valor del paquete %f, Tipo: %i", rx_buf.value, rx_buf.type);
-
-    if(esp_mesh_is_root()){
+    ESP_LOGI(MESH_TAG, "Valor del paquete %f, Tipo: %i", rx_buf.value, rx_buf.type);
+    ESP_LOGI(MESH_TAG, "Es root:%i", esp_mesh_is_root());
+    if (esp_mesh_is_root())
+    {
+      ESP_LOGI(MESH_TAG, "Sending to MQTT");
+      snprintf(buffer, sizeof buffer, "%f", rx_buf.value);
       // en caso de ser root mandar los datos directamente al mqtt
       // ya que aqui solo llegarían los datos de humedad y temperatura de los nodos
+
+      if (rx_buf.type == Soil_Humidity)
+      {
+        publish_data("tec/soil/humidity", buffer);
+        continue;
+      }
+
+      if (rx_buf.type == Humidity)
+      {
+        publish_data("tec/dht22/humidity", buffer);
+        continue;
+      }
+
+      if (rx_buf.type == Temperature)
+      {
+        publish_data("tec/dht22/temperature", buffer);
+        continue;
+      }
+
+      continue;
+    }
+    ESP_LOGI(MESH_TAG, "En nodo");
+    // en caso de ser nodo lo que se recibe son paquetes de configuracion
+    if (rx_buf.type == Change_Diference)
+    {
+      ESP_LOGI(MESH_TAG, "Colocando el valor");
+      set_capture_variation(rx_buf.value);
       continue;
     }
 
-    // en caso de ser nodo lo que se recibe son paquetes de configuracion
+    if (rx_buf.type == Change_Time)
+    {
+      ESP_LOGI(MESH_TAG, "Colocando el valor");
+      set_capture_frecuency(rx_buf.value);
+      continue;
+    }
 
-    // hacer la configuración aquí
-
+    if (rx_buf.type == Restart)
+    {
+      esp_restart();
+      continue;
+    }
   }
   vTaskDelete(NULL);
 }
@@ -97,17 +185,14 @@ esp_err_t esp_mesh_comm_p2p_start(void)
 
 void mesh_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
 {
-  mesh_addr_t id = {
-      0,
-  };
   uint16_t last_layer = 0;
 
   switch (event_id)
   {
   case MESH_EVENT_STARTED:
   {
-    esp_mesh_get_id(&id);
-    ESP_LOGI(MESH_TAG, "<MESH_EVENT_MESH_STARTED>ID:" MACSTR "", MAC2STR(id.addr));
+    esp_mesh_get_id(&my_addr);
+    ESP_LOGI(MESH_TAG, "<MESH_EVENT_MESH_STARTED>ID:" MACSTR "", MAC2STR(my_addr.addr));
     is_mesh_connected = false;
     mesh_layer = esp_mesh_get_layer();
   }
@@ -122,7 +207,7 @@ void mesh_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id
   case MESH_EVENT_PARENT_CONNECTED:
   {
     mesh_event_connected_t *connected = (mesh_event_connected_t *)event_data;
-    esp_mesh_get_id(&id);
+    esp_mesh_get_id(&my_addr);
     mesh_layer = connected->self_layer;
     memcpy(&mesh_parent_addr.addr, connected->connected.bssid, 6);
     ESP_LOGI(MESH_TAG,
@@ -130,7 +215,7 @@ void mesh_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id
              last_layer, mesh_layer, MAC2STR(mesh_parent_addr.addr),
              esp_mesh_is_root() ? "<ROOT>" : (mesh_layer == 2) ? "<layer2>"
                                                                : "",
-             MAC2STR(id.addr), connected->duty);
+             MAC2STR(my_addr.addr), connected->duty);
     last_layer = mesh_layer;
 
     is_mesh_connected = true;

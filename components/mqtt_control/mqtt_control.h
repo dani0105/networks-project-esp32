@@ -19,6 +19,7 @@
 #include "mqtt_client.h"
 #include "esp_tls.h"
 #include "esp_ota_ops.h"
+#include "mesh_control.h"
 #include <sys/param.h>
 
 

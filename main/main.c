@@ -1,20 +1,29 @@
-#include <stdio.h>
-#include "sdkconfig.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "esp_system.h"
-#include "esp_log.h"
-#include "mqtt_control.h"
-#include "moisture_sensor.h"
-#include "dht22.h"
-#include "mesh_control.h"
+#include "main.h"
 
-struct data
+#define TAG "MAIN"
+
+float variation = 1;     // un punto
+float frecuency = 60000; // 60 segundos
+
+void set_capture_frecuency(float value)
 {
-  float temperature;
-  float humidity;
-  float soil_humidity;
-};
+  frecuency = value;
+  if (get_is_root())
+  {
+    ESP_LOGI(TAG, "Sending %f to another nodes", value);
+    esp_mesh_p2p_tx_main(value, Change_Time);
+  }
+}
+
+void set_capture_variation(float value)
+{
+  variation = value;
+  if (get_is_root())
+  {
+    ESP_LOGI(TAG, "Sending %f to another nodes", value);
+    esp_mesh_p2p_tx_main(value, Change_Diference);
+  }
+}
 
 // obtiene el tiempo en milisegundos
 long get_time()
@@ -39,37 +48,47 @@ void task_capture_data(void *args)
   long last_record = get_time();
   while (1)
   {
-
+    ESP_LOGI(TAG, "Time: %f. Variation %f", frecuency, variation);
     int ret = readDHT();
     long current_record = get_time();
-    errorHandler(ret);
-    current_data.humidity = getHumidity();
-    current_data.temperature = getTemperature();
+
+    // si la lectura fue buena
+    if (ret == DHT_OK)
+    {
+      current_data.humidity = getHumidity();
+      current_data.temperature = getTemperature();
+
+      if (abs(last_data.temperature - current_data.temperature) > variation || (current_record - last_record) > frecuency)
+      {
+        ESP_LOGI(TAG,"Temperatura: %i",abs(last_data.temperature - current_data.temperature));
+        last_record = current_record;
+        last_data.temperature = current_data.temperature;
+
+        esp_mesh_p2p_tx_main(current_data.temperature, Temperature);
+      }
+
+      if (abs(last_data.humidity - current_data.humidity) > variation || (current_record - last_record) > frecuency)
+      {
+        ESP_LOGI(TAG,"Humedad: %i",abs(last_data.humidity - current_data.humidity));
+        last_record = current_record;
+        last_data.humidity = current_data.humidity;
+        esp_mesh_p2p_tx_main(current_data.humidity, Humidity);
+      }
+    }
+
     current_data.soil_humidity = get_soil_humidity();
-
-    if (abs(last_data.temperature - current_data.temperature) > 1 || (current_record - last_record) > 60000)
+    // si los valores estan en el rango
+    if (100 > current_data.soil_humidity && current_data.soil_humidity > 0)
     {
-      last_record = current_record;
-      last_data.temperature = current_data.temperature;
-
-      esp_mesh_p2p_tx_main(current_record, Temperature);
+      if (abs(last_data.soil_humidity - current_data.soil_humidity) > variation || (current_record - last_record) > frecuency)
+      {
+        last_record = current_record;
+        last_data.soil_humidity = current_data.soil_humidity;
+        esp_mesh_p2p_tx_main(current_data.soil_humidity, Soil_Humidity);
+      }
     }
 
-    if (abs(last_data.humidity - current_data.humidity) > 1 || (current_record - last_record) > 60000)
-    {
-      last_record = current_record;
-      last_data.humidity = current_data.humidity;
-      esp_mesh_p2p_tx_main(current_record, Humidity);
-    }
-
-    if (abs(last_data.soil_humidity - current_data.soil_humidity) > 1 || (current_record - last_record) > 60000)
-    {
-      last_record = current_record;
-      last_data.soil_humidity = current_data.soil_humidity;
-      esp_mesh_p2p_tx_main(current_record, Soil_Humidity);
-    }
-
-    vTaskDelay(100 / portTICK_PERIOD_MS);
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
   }
 
   vTaskDelete(NULL);
@@ -79,12 +98,23 @@ void task_capture_data(void *args)
 void app_main()
 {
   mesh_layer = -1;
+  ESP_LOGI(TAG, "Starting MESH red");
   iniciar_mesh_red();
-
   // mientras no este conectado al wifi o a una red mesh
-  while (!get_is_wifi_connected() && !get_is_mesh_connected())
+  ESP_LOGI(TAG, "Wating for MESH");
+  while (!get_is_mesh_connected())
   {
     vTaskDelay(1000 / portTICK_PERIOD_MS);
+  }
+
+  // es el nodo red y debe esperar por el wifi
+  if (get_is_root())
+  {
+    ESP_LOGI(TAG, "Wating for WIFI");
+    while (!get_is_wifi_connected())
+    {
+      vTaskDelay(1000 / portTICK_PERIOD_MS);
+    }
   }
 
   ESP_ERROR_CHECK(nvs_flash_init());
@@ -92,16 +122,24 @@ void app_main()
   // Inicia analog-to-digital converter (adc)
   init_adc_config();
 
-  // si esta conectado al wifi
-  if(get_is_wifi_connected()){
+  // si esta conectado al wifi es el raiz y debe iniciar el MQTT
+  if (get_is_wifi_connected())
+  {
     // inicia el mqtt
+    ESP_LOGI(TAG, "Starting MQTT conection");
     mqtt_app_start();
 
     // Mientra no este conectado al mqtt
     while (!is_connected)
     {
+      ESP_LOGI(TAG, "Wating for MQTT connection");
       vTaskDelay(1000 / portTICK_PERIOD_MS);
     }
+
+    ESP_LOGI(TAG, "Subscribing to topics");
+    subscribe_topic("esp32/frecuency");
+    subscribe_topic("esp32/restart");
+    subscribe_topic("esp32/variation");
   }
 
   // agrega tareas (son como hilos)

@@ -1,4 +1,5 @@
 #include "mqtt_control.h"
+#include "main.h"
 
 static const char *TAG = "MQTTS";
 
@@ -48,7 +49,6 @@ void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event
     ESP_LOGD(TAG, "Event dispatched from event loop base=%s, event_id=%d", base, event_id);
     esp_mqtt_event_handle_t event = event_data;
     client = event->client;
-    int msg_id;
     //TODO create a global variable for topic and message... copy with strncpy ()
     switch ((esp_mqtt_event_id_t)event_id)
     {
@@ -104,44 +104,34 @@ void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event
 
 // maneja los topics 
 void mqtt_topics_handler(esp_mqtt_event_handle_t event){
-  char topic[120];
-  snprintf(topic, event->topic_len,"%s", event->topic);
+  char topic[event->topic_len]; 
+  snprintf(topic,event->topic_len,"%s", event->topic);
+  ESP_LOGI(TAG,"Topic received: %s", topic);
 
-  if(strcmp(topic,"esp32/frecuencia")  == 0){
-    
+  if(strcmp(topic,"esp32/frecuenc")  == 0){
+    ESP_LOGI(TAG,"Change frecuency received");
+    float value = atof(event->data);
+    set_capture_frecuency(value);
+    return;
   }
 
-  if(strcmp(topic,"esp32/reinicio")  == 0){
-    
+  if(strcmp(topic,"esp32/restar")  == 0){
+    ESP_LOGI(TAG,"Restart command received");
+    esp_mesh_p2p_tx_main(1,Restart);
+    return;
   }
 
-  if(strcmp(topic,"esp32/variacion")  == 0 ){
-    
+  if(strcmp(topic,"esp32/variatio")  == 0 ){
+    ESP_LOGI(TAG,"Change variation received");
+    float value = atof(event->data);
+    set_capture_variation(value);
   }
- 
+
 }
 
 void mqtt_app_start(void)
 {
     is_connected = false;
-
-    /*// lee el cer para la conexión
-    FILE* f = fopen("/spiffs/chain.pem", "r");
-    long length=0;
-    char * buffer = 0;
-
-    if (f)
-    {
-      fseek (f, 0, SEEK_END);
-      length = ftell (f);
-      fseek (f, 0, SEEK_SET);
-      buffer = malloc (length);
-      if (buffer)
-      {
-        fread (buffer, 1, length, f);
-      }
-      fclose (f);
-    }*/
 
     const esp_mqtt_client_config_t mqtt_cfg = {
         .uri = "mqtts://redes.danielrojas.website:8883",
@@ -168,5 +158,5 @@ void subscribe_topic(const char *topic){
     if (!is_connected)
         return;
     int msg_id = esp_mqtt_client_subscribe(client, topic, 1);
-    ESP_LOGI(TAG, "sent subscribe successful, msg_id=%d", msg_id);
+    ESP_LOGI(TAG, "set subscribe successful, msg_id=%d", msg_id);
 }

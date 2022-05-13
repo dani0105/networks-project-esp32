@@ -35,7 +35,7 @@ default 50
 help
     The number of devices over the network(max: 300).
 */
-#define MESH_ROUTE_TABLE_SIZE   50
+#define MESH_ROUTE_TABLE_SIZE   3
 /*
 default 0 if MESH_TOPO_TREE
 default 1 if MESH_TOPO_CHAIN
@@ -90,5 +90,6 @@ struct Packet
 void esp_mesh_p2p_tx_main(float value, Type type);
 bool get_is_wifi_connected();
 bool get_is_mesh_connected();
+bool get_is_root();
 
 #endif
