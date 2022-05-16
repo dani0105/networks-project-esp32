@@ -9,7 +9,10 @@
 #include "dht22.h"
 #include "mesh_control.h"
 
+//Se definen las variables para implementarlas en el main.c
 
+
+//Estructura que contiene temperatura, humedad y humedad del suelo.
 struct data
 {
   float temperature;

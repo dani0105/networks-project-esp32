@@ -3,6 +3,7 @@
 
 static const char *TAG = "MQTTS";
 
+//Este es el certificado TLS para conexion con AWS Mosquito mqtt.
 static const uint8_t mqtt_arenalconnected_pem_start[] = "-----BEGIN CERTIFICATE-----\n"
                                                         "MIIFFjCCAv6gAwIBAgIRAJErCErPDBinU/bWLiWnX1owDQYJKoZIhvcNAQELBQAw\n"
                                                         "TzELMAkGA1UEBhMCVVMxKTAnBgNVBAoTIEludGVybmV0IFNlY3VyaXR5IFJlc2Vh\n"
@@ -102,7 +103,8 @@ void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event
     }
 }
 
-// maneja los topics 
+// maneja los topics que son enviados desde el node-red a traves de mqtt.
+// Se recibe un evento, que contiene informacion como el largo del topic o el topic como tal.
 void mqtt_topics_handler(esp_mqtt_event_handle_t event){
   char topic[event->topic_len]; 
   snprintf(topic,event->topic_len,"%s", event->topic);
@@ -129,10 +131,12 @@ void mqtt_topics_handler(esp_mqtt_event_handle_t event){
 
 }
 
+//Se realiza la conexion al broker mqtt.
 void mqtt_app_start(void)
 {
     is_connected = false;
 
+    //Credenciales para conexion con mqtt
     const esp_mqtt_client_config_t mqtt_cfg = {
         .uri = "mqtts://redes.danielrojas.website:8883",
         .cert_pem = (const char *)mqtt_arenalconnected_pem_start,
@@ -147,6 +151,7 @@ void mqtt_app_start(void)
     esp_mqtt_client_start(client);
 }
 
+//Esta funcion publica la informacion hacia mqtt. Recibe como parametros topic que es el tema a enviar, y tambien el mensaje que se envia.
 void publish_data(const char* topic, const char* message){
     if (!is_connected)
         return;
@@ -154,6 +159,7 @@ void publish_data(const char* topic, const char* message){
     ESP_LOGI(TAG, "publish_data (%s) -> %s", topic, message);
 }
 
+//Esta funcion se suscribe a un topic, recibe como parametros un tema de tipo cadena de char.
 void subscribe_topic(const char *topic){
     if (!is_connected)
         return;

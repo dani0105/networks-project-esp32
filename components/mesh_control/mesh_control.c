@@ -12,22 +12,26 @@ mesh_addr_t mesh_parent_addr;
 mesh_addr_t my_addr;
 esp_netif_t *netif_sta = NULL;
 
+//Verificamos si el internet esta conectado.
 bool get_is_wifi_connected()
 {
   return is_wifi_connected;
 }
-
+//Verificamos si la red mesh esta operando.
 bool get_is_mesh_connected()
 {
   return is_mesh_connected;
 }
 
+//Verificamos si es una raiz o un nodo.0
 bool get_is_root()
 {
   return esp_mesh_is_root();
 }
 
-// envia paquetes
+// Envia los paquetes mediante la red mesh. En caso de que esta sea la raiz, enviaria parametros hacia los nodos, y de igual forma
+// Si son nodos, lo envia a la raiz.
+// Recibe 2 parametros, un valor que es el que se va a enviar de tipo float, y un typo que es un enum que tenemos en mesh_control.h
 void esp_mesh_p2p_tx_main(float value, Type type)
 {
   mesh_addr_t route_table[MESH_ROUTE_TABLE_SIZE];
@@ -53,12 +57,12 @@ void esp_mesh_p2p_tx_main(float value, Type type)
 
   char buffer[64];
   snprintf(buffer, sizeof buffer, "%f", tx_buf.value);
-
+    
+  // en caso de ser root mandar directamente al mqtt
   if (esp_mesh_is_root())
   {
-    // en caso de ser root mandar directamente al mqtt
-
-    // en caso de que los mensajes fuera de configuración
+    
+    //Se verifica entre los tipos de sensores y se publica la informacion.
     if (tx_buf.type == Soil_Humidity)
     {
       publish_data("tec/soil/humidity", buffer);
@@ -77,12 +81,14 @@ void esp_mesh_p2p_tx_main(float value, Type type)
       return;
     }
 
+    // en caso de que los mensajes fuera de configuración
     for (i = 0; i < route_table_size; i++)
     {
       esp_mesh_send(&route_table[i], &data, MESH_DATA_P2P, NULL, 0);
       ESP_LOGI(MESH_TAG, "Sending to:" MACSTR "", MAC2STR(route_table[i].addr));
     }
 
+    //En caso de que que el tipo sea de reinicio, se reinicia tanto lo nodos como la raiz.
     if (tx_buf.type == Restart)
     {
       ESP_LOGI(MESH_TAG, "Restarting...");
@@ -120,13 +126,14 @@ void esp_mesh_p2p_rx_main(void *arg)
     // aqui solo llega si hay un paquete
     ESP_LOGI(MESH_TAG, "Valor del paquete %f, Tipo: %i", rx_buf.value, rx_buf.type);
     ESP_LOGI(MESH_TAG, "Es root:%i", esp_mesh_is_root());
+    
+    //Verificamos si es raiz o nodo. En caso de que sea root, se realiza el envio a mqtt
     if (esp_mesh_is_root())
     {
       ESP_LOGI(MESH_TAG, "Sending to MQTT");
       snprintf(buffer, sizeof buffer, "%f", rx_buf.value);
       // en caso de ser root mandar los datos directamente al mqtt
       // ya que aqui solo llegarían los datos de humedad y temperatura de los nodos
-
       if (rx_buf.type == Soil_Humidity)
       {
         publish_data("tec/soil/humidity", buffer);
@@ -148,7 +155,8 @@ void esp_mesh_p2p_rx_main(void *arg)
       continue;
     }
     ESP_LOGI(MESH_TAG, "En nodo");
-    // en caso de ser nodo lo que se recibe son paquetes de configuracion
+
+    // en caso de ser nodo lo que se recibe son paquetes de configuracion y debe ser aplicada.
     if (rx_buf.type == Change_Diference)
     {
       ESP_LOGI(MESH_TAG, "Colocando el valor");
@@ -172,6 +180,7 @@ void esp_mesh_p2p_rx_main(void *arg)
   vTaskDelete(NULL);
 }
 
+//Inicia el hilo de escucha en la red esp32. Tiene un retorno void.
 esp_err_t esp_mesh_comm_p2p_start(void)
 {
   static bool is_comm_p2p_started = false;
@@ -183,10 +192,12 @@ esp_err_t esp_mesh_comm_p2p_start(void)
   return ESP_OK;
 }
 
+//Esta funcion maneja todos los eventos de la red mesh.
 void mesh_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
 {
   uint16_t last_layer = 0;
 
+  //Este switch maneja la mayoria de eventos que puede suceder dentro de la red mesh.
   switch (event_id)
   {
   case MESH_EVENT_STARTED:
@@ -259,6 +270,7 @@ void mesh_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id
   }
 }
 
+//Maneja la ip del wifi. Cuando la raiz contiene una ip, quiere decir que ya posee conexion.
 #ifdef CONNECT_WIFI_ROUTER
 void ip_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
 {
@@ -268,6 +280,7 @@ void ip_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, 
 }
 #endif
 
+//Este bloque de codigo inicializa la red mesh.
 esp_err_t iniciar_mesh_red()
 {
   esp_err_t err = ESP_OK;

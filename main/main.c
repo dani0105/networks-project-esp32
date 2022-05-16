@@ -2,9 +2,10 @@
 
 #define TAG "MAIN"
 
-float variation = 1;     // un punto
-float frecuency = 60000; // 60 segundos
+float variation = 1;     // esta es la variacion que va a tener el cambio de datos en los sensores.
+float frecuency = 60000; // esta es la frecuencia de envio de los datos conseguidos.
 
+//Esta funcion se encarga de actualizar la frecuencia con la que se envian los datos. Recibe un parametro de tiempo tipo float.
 void set_capture_frecuency(float value)
 {
   frecuency = value;
@@ -15,6 +16,7 @@ void set_capture_frecuency(float value)
   }
 }
 
+//Esta funcion se encarga de actualizar la variacion que debe presentar una variable para envair los datos. Recibe un parametro de tiempo tipo float.
 void set_capture_variation(float value)
 {
   variation = value;
@@ -31,7 +33,7 @@ long get_time()
   return esp_timer_get_time() / 1000;
 }
 
-// funcion encargada de leer el sensor dht22
+// Funcion encargada de leer el sensor dht22 y el sensor soil moisture_sensor. El parametro que se envia es de referencia y no esta siendo utilizado.
 void task_capture_data(void *args)
 {
   setDHTgpio(4);
@@ -58,6 +60,7 @@ void task_capture_data(void *args)
       current_data.humidity = getHumidity();
       current_data.temperature = getTemperature();
 
+      //Si el dato actual es mayor a la variacion o si ya paso el tiempo o frecuencia establecida, se envian los datos.
       if (abs(last_data.temperature - current_data.temperature) > variation || (current_record - last_record) > frecuency)
       {
         ESP_LOGI(TAG,"Temperatura: %i",abs(last_data.temperature - current_data.temperature));
@@ -67,6 +70,7 @@ void task_capture_data(void *args)
         esp_mesh_p2p_tx_main(current_data.temperature, Temperature);
       }
 
+      //Si el dato actual es mayor a la variacion o si ya paso el tiempo o frecuencia establecida, se envian los datos.
       if (abs(last_data.humidity - current_data.humidity) > variation || (current_record - last_record) > frecuency)
       {
         ESP_LOGI(TAG,"Humedad: %i",abs(last_data.humidity - current_data.humidity));
@@ -77,7 +81,7 @@ void task_capture_data(void *args)
     }
 
     current_data.soil_humidity = get_soil_humidity();
-    // si los valores estan en el rango
+    // si los valores estan en el rango de los sensores se envian estos datos.
     if (100 > current_data.soil_humidity && current_data.soil_humidity > 0)
     {
       if (abs(last_data.soil_humidity - current_data.soil_humidity) > variation || (current_record - last_record) > frecuency)

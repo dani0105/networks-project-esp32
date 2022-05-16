@@ -69,7 +69,7 @@ default 4 if WIFI_AUTH_WPA_WPA2_PSK
 
 #define MESH_AP_PASSWD          "RedesIoT"
 
-
+//Este enum, contiene los tipos de datos que se reciben y envian.
 int mesh_layer;
 esp_err_t iniciar_mesh_red();
 typedef enum {

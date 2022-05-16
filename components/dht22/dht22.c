@@ -31,11 +31,12 @@
 
 // == global defines =============================================
 
+//Definimos la etiqueta para el posterior log.
 static const char *TAG = "DHT";
 
 int DHTgpio = 4; // my default DHT pin = 4
-float humidity = 0.;
-float temperature = 0.;
+float humidity = 0.; //Humedad
+float temperature = 0.; //Temperatura
 
 // == set the DHT used pin=========================================
 
@@ -139,6 +140,7 @@ To request data from DHT:
 ;----------------------------------------------------------------------------*/
 
 #define MAXdhtData 5 // to complete 40 = 5*8 Bits
+
 
 int readDHT()
 {

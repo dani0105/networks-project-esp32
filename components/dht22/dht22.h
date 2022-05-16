@@ -11,6 +11,7 @@
 #include "freertos/task.h"
 #include "esp_adc_cal.h"
 
+//Se definen las variables para utilizar en dht22.c
 
 #define DHT_OK 0
 #define DHT_CHECKSUM_ERROR -1
