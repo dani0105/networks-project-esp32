@@ -47,7 +47,9 @@ void task_capture_data(void *args)
   current_data.humidity = 0;
   current_data.soil_humidity = 0;
 
-  long last_record = get_time();
+  long last_record_temp = get_time();
+  long last_record_hum = get_time();
+  long last_record_soil = get_time();
   while (1)
   {
     ESP_LOGI(TAG, "Time: %f. Variation %f", frecuency, variation);
@@ -61,20 +63,20 @@ void task_capture_data(void *args)
       current_data.temperature = getTemperature();
 
       //Si el dato actual es mayor a la variacion o si ya paso el tiempo o frecuencia establecida, se envian los datos.
-      if (abs(last_data.temperature - current_data.temperature) > variation || (current_record - last_record) > frecuency)
+      if (abs(last_data.temperature - current_data.temperature) > variation || (current_record - last_record_temp) > frecuency)
       {
         ESP_LOGI(TAG,"Temperatura: %i",abs(last_data.temperature - current_data.temperature));
-        last_record = current_record;
+        last_record_temp = current_record;
         last_data.temperature = current_data.temperature;
 
         esp_mesh_p2p_tx_main(current_data.temperature, Temperature);
       }
 
       //Si el dato actual es mayor a la variacion o si ya paso el tiempo o frecuencia establecida, se envian los datos.
-      if (abs(last_data.humidity - current_data.humidity) > variation || (current_record - last_record) > frecuency)
+      if (abs(last_data.humidity - current_data.humidity) > variation || (current_record - last_record_hum) > frecuency)
       {
         ESP_LOGI(TAG,"Humedad: %i",abs(last_data.humidity - current_data.humidity));
-        last_record = current_record;
+        last_record_hum = current_record;
         last_data.humidity = current_data.humidity;
         esp_mesh_p2p_tx_main(current_data.humidity, Humidity);
       }
@@ -84,9 +86,9 @@ void task_capture_data(void *args)
     // si los valores estan en el rango de los sensores se envian estos datos.
     if (100 > current_data.soil_humidity && current_data.soil_humidity > 0)
     {
-      if (abs(last_data.soil_humidity - current_data.soil_humidity) > variation || (current_record - last_record) > frecuency)
+      if (abs(last_data.soil_humidity - current_data.soil_humidity) > variation || (current_record - last_record_soil) > frecuency)
       {
-        last_record = current_record;
+        last_record_soil = current_record;
         last_data.soil_humidity = current_data.soil_humidity;
         esp_mesh_p2p_tx_main(current_data.soil_humidity, Soil_Humidity);
       }
